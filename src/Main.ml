@@ -267,12 +267,126 @@ let print_sym fname =
   Format.printf "%s"  (sym_string_of_expr tuple);
   ()
 
+let rec mappl_string_of_expr (e:expr) =
+  match e with
+  | True -> "true"
+  | False -> "false"
+  | Ident(s) -> s
+  | Flip(f) -> failwith "use CAT instead"
+  | Not(Ident(s)) -> failwith "Invalid syntax: MAPPL does not have unary negation"
+  | And(e1, e2) -> Format.sprintf "return %s and %s" (mappl_string_of_expr e1) (mappl_string_of_expr e2)
+  | Or(e1, e2) -> Format.sprintf "return %s or %s" (mappl_string_of_expr e1) (mappl_string_of_expr e2)
+  | Eq(e1, e2) ->
+    let s1 = mappl_string_of_expr e1 in
+    let s2 = mappl_string_of_expr e2 in
+    Format.sprintf "%s = %s" s1 s2
+  | Int(v, _) -> string_of_int v
+  | Ite(g, t, e) -> Format.sprintf "if %s then { %s } else { %s } end" (mappl_string_of_expr g)
+                      (mappl_string_of_expr t) (mappl_string_of_expr e)
+  | Category(l) ->
+    let res = List.foldi l ~init:(Format.sprintf "") ~f:(fun idx acc i ->
+        if idx = 0 then
+          Format.sprintf "%s%f" acc i
+        else
+          Format.sprintf "%s,%f" acc i
+      ) in
+    Format.sprintf "%s" res
+  | Tuple(e1, e2) ->
+    let s1 = mappl_string_of_expr e1 in
+    let s2 = mappl_string_of_expr e2 in
+    Format.sprintf "(%s, %s)" s1 s2
+  | _ -> failwith "unidentified"
+;;
+
+let print_mappl fname =
+  let f = In_channel.create fname in
+  let network = Bn.load_bif f in
+  let p = List.map (Array.to_list network.topo_vars) ~f:(fun var ->
+              var_assgn network var
+    ) in
+  List.iter p ~f:(fun (ident, typ, body) ->
+      Format.printf "%s = sample(CAT(%s));\n" ident (mappl_string_of_expr body)
+    );
+  match p with 
+    | [] -> failwith "empty list"
+    | (id, _, _)::xs ->
+    let tuple : expr = List.fold xs ~init:(Ident(id)) ~f:(fun acc (id, typ, _) ->
+      match typ with
+      | TCategory(sz) -> Tuple(Ident(id), acc)
+      | TBool -> Or(Ident(id), acc)
+    ) in
+  (* print tuple of results *)
+  (* let (last_id, _, _) = List.last_exn p in *)
+  Format.printf "return %s;\n"  (mappl_string_of_expr tuple);
+  ()
+
+  let rec sppl_string_of_expr (e:expr) =
+    match e with
+    | True -> "true"
+    | False -> "false"
+    | Ident(s) -> s
+    | Flip(f) -> failwith "use discrete instead"
+    | Not(Ident(s)) -> failwith "! not implemented"
+    | And(e1, e2) -> Format.sprintf "%s and %s" (sppl_string_of_expr e1) (sppl_string_of_expr e2)
+    | Or(e1, e2) -> Format.sprintf "%s or %s" (sppl_string_of_expr e1) (sppl_string_of_expr e2)
+    | Eq(e1, e2) ->
+      let s1 = sppl_string_of_expr e1 in
+      let s2 = sppl_string_of_expr e2 in
+      Format.sprintf "%s == %s" s1 s2
+    | Int(v, _) -> string_of_int v
+    | Ite(g, t, e) -> Format.sprintf "(%s) if (%s) else (%s)" (sppl_string_of_expr t)
+                        (sppl_string_of_expr g) (sppl_string_of_expr e)
+    | Category(l) ->
+      let iter = List.foldi l ~init:("") ~f:(fun idx acc i -> 
+          if idx + 1 = List.length l then
+            Format.sprintf "%s%d" acc idx
+          else
+            Format.sprintf "%s%d," acc idx
+        ) in
+      let res = List.foldi l ~init:("") ~f:(fun idx acc i ->
+          if idx = 0 then
+            Format.sprintf "%s%f" acc i
+          else
+            Format.sprintf "%s,%f" acc i
+        ) in
+        Format.sprintf "rv_discrete(values=((%s), (%s)))" iter res
+    | Tuple(e1, e2) ->
+      let s1 = sppl_string_of_expr e1 in
+      let s2 = sppl_string_of_expr e2 in
+      Format.sprintf "(%s, %s)" s1 s2
+    | _ -> failwith "unidentified"
+  ;;
+  
+  let print_sppl fname =
+    let f = In_channel.create fname in
+    let network = Bn.load_bif f in
+    let p = List.map (Array.to_list network.topo_vars) ~f:(fun var ->
+                var_assgn network var
+      ) in
+    List.iter p ~f:(fun (ident, typ, body) ->
+        Format.printf "%s ~= %s\n" ident (sppl_string_of_expr body)
+      );
+    match p with 
+      | [] -> failwith "empty list"
+      | (id, _, _)::xs ->
+      let tuple : expr = List.fold xs ~init:(Ident(id)) ~f:(fun acc (id, typ, _) ->
+        match typ with
+        | TCategory(sz) -> Tuple(Ident(id), acc)
+        | TBool -> Or(Ident(id), acc)
+      ) in
+    (* print tuple of results *)
+    (* let (last_id, _, _) = List.last_exn p in *)
+    Format.printf "return %s;\n"  (sppl_string_of_expr tuple);
+    ()
+
 (* parse bif *)
 let () =
   let ftype = Array.get Sys.argv 1 in
   let fname = Array.get Sys.argv 2 in
   match ftype with
-    "psi" -> print_psi fname
+  | "sppl" -> print_sppl fname
+  | "mappl" -> print_mappl fname
+  | "psi" -> print_psi fname
   | "sym" -> print_sym fname
   | "simppl" -> print_simppl fname
-  | _ -> failwith "uncrecognized arg type"
+  | _ -> failwith "unrecognized arg type"
