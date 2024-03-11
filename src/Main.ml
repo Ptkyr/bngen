@@ -281,7 +281,7 @@ let rec mappl_string_of_expr (e:expr) =
     let s2 = mappl_string_of_expr e2 in
     Format.sprintf "%s = %s" s1 s2
   | Int(v, _) -> string_of_int v
-  | Ite(g, t, e) -> Format.sprintf "if %s then { %s } else { %s } end" (mappl_string_of_expr g)
+  | Ite(g, t, e) -> Format.sprintf "if %s then (%s) else (%s) end" (mappl_string_of_expr g)
                       (mappl_string_of_expr t) (mappl_string_of_expr e)
   | Category(l) ->
     let res = List.foldi l ~init:(Format.sprintf "") ~f:(fun idx acc i ->
@@ -290,11 +290,11 @@ let rec mappl_string_of_expr (e:expr) =
         else
           Format.sprintf "%s,%f" acc i
       ) in
-    Format.sprintf "%s" res
+    Format.sprintf "%d, [%s]" (List.length l) res
   | Tuple(e1, e2) ->
     let s1 = mappl_string_of_expr e1 in
     let s2 = mappl_string_of_expr e2 in
-    Format.sprintf "(%s, %s)" s1 s2
+    Format.sprintf "%s" s1
   | _ -> failwith "unidentified"
 ;;
 
@@ -304,8 +304,9 @@ let print_mappl fname =
   let p = List.map (Array.to_list network.topo_vars) ~f:(fun var ->
               var_assgn network var
     ) in
+  Format.printf "def model() : Unit =\n";
   List.iter p ~f:(fun (ident, typ, body) ->
-      Format.printf "%s = sample(CAT(%s));\n" ident (mappl_string_of_expr body)
+      Format.printf "    %s = sample(CAT(%s));\n" ident (mappl_string_of_expr body)
     );
   match p with 
     | [] -> failwith "empty list"
@@ -317,7 +318,7 @@ let print_mappl fname =
     ) in
   (* print tuple of results *)
   (* let (last_id, _, _) = List.last_exn p in *)
-  Format.printf "return %s;\n"  (mappl_string_of_expr tuple);
+  Format.printf "    condition(%s == 0);\n"  (mappl_string_of_expr tuple);
   ()
 
   let rec sppl_string_of_expr (e:expr) =
@@ -332,24 +333,18 @@ let print_mappl fname =
     | Eq(e1, e2) ->
       let s1 = sppl_string_of_expr e1 in
       let s2 = sppl_string_of_expr e2 in
-      Format.sprintf "%s == %s" s1 s2
+      Format.sprintf "%s == '%s'" s1 s2
     | Int(v, _) -> string_of_int v
     | Ite(g, t, e) -> Format.sprintf "(%s) if (%s) else (%s)" (sppl_string_of_expr t)
                         (sppl_string_of_expr g) (sppl_string_of_expr e)
     | Category(l) ->
-      let iter = List.foldi l ~init:("") ~f:(fun idx acc i -> 
-          if idx + 1 = List.length l then
-            Format.sprintf "%s%d" acc idx
-          else
-            Format.sprintf "%s%d," acc idx
-        ) in
       let res = List.foldi l ~init:("") ~f:(fun idx acc i ->
           if idx = 0 then
-            Format.sprintf "%s%f" acc i
+            Format.sprintf "%s'%d': %f" acc idx i
           else
-            Format.sprintf "%s,%f" acc i
+            Format.sprintf "%s, '%d': %f" acc idx i
         ) in
-        Format.sprintf "rv_discrete(values=((%s), (%s)))" iter res
+        Format.sprintf "choice({%s})" res
     | Tuple(e1, e2) ->
       let s1 = sppl_string_of_expr e1 in
       let s2 = sppl_string_of_expr e2 in
