@@ -1,9 +1,12 @@
 #!/bin/bash
 
-if [ ${#} -ne 1 ]; then
-    echo "Usage: run.sh [<>.bif]" >&2
-    exit 1
-fi
+#if [ ${#} -ne 1 ]; then
+#    echo "Usage: run.sh [<>.bif]" >&2
+#    exit 1
+#fi
 
 make build
-~/bngen/Main.native mappl ${1}
+for file in $(ls bayesian-networks/*.bif) 
+do
+    ~/bngen/Main.native mappl ${file} > ${file}.mappl
+done

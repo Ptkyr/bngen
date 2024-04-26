@@ -290,7 +290,7 @@ let rec mappl_string_of_expr (e:expr) =
         else
           Format.sprintf "%s,%f" acc i
       ) in
-    Format.sprintf "%d, [%s]" (List.length l) res
+    Format.sprintf "[%s]" res
   | Tuple(e1, e2) ->
     let s1 = mappl_string_of_expr e1 in
     let s2 = mappl_string_of_expr e2 in
@@ -304,7 +304,7 @@ let print_mappl fname =
   let p = List.map (Array.to_list network.topo_vars) ~f:(fun var ->
               var_assgn network var
     ) in
-  Format.printf "def model() : Unit =\n";
+  Format.printf "def model() : Unit = {\n";
   List.iter p ~f:(fun (ident, typ, body) ->
       Format.printf "    %s = sample(CAT(%s));\n" ident (mappl_string_of_expr body)
     );
@@ -318,7 +318,7 @@ let print_mappl fname =
     ) in
   (* print tuple of results *)
   (* let (last_id, _, _) = List.last_exn p in *)
-  Format.printf "    condition(%s == 0);\n"  (mappl_string_of_expr tuple);
+  Format.printf "    observe (%s = 0) from BERN(1);\n    return unit\n}"  (mappl_string_of_expr tuple);
   ()
 
   let rec sppl_string_of_expr (e:expr) =
